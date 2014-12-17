@@ -174,6 +174,7 @@ class Config(object):
 
         self.options = self._validate(cmde_line_opt, values)
 
+
     def _validate(self, cmde_line_opt, cmde_line_values):
         """
         Get all configuration values and check the validity of their values.
@@ -203,19 +204,17 @@ class Config(object):
             raise ValueError("The results directory (%s) is not writable" % options['res_search_dir'])
 
         working_dir = os.path.join(options['res_search_dir'], "macsyfinder-" + strftime("%Y%m%d_%H-%M-%S"))
-        if not os.path.isdir(working_dir):
-            try:
-                os.mkdir(working_dir)
-            except OSError, err:
-                raise ValueError("cannot create MacSyFinder working directory %s : %s" % (working_dir, err))
+        try:
+            os.mkdir(working_dir)
+        except OSError, err:
+            raise ValueError("cannot create MacSyFinder working directory %s : %s" % (working_dir, err))
         options['working_dir'] = working_dir
 
         hmmer_path = os.path.join(working_dir, self.hmmer_dir)
-        if not os.path.isdir(hmmer_path):
-            try:
-                os.mkdir(hmmer_path)
-            except OSError, err:
-                raise ValueError("cannot create MacSyFinder hmmer directory %s : %s" % (hmmer_path, err))
+        try:
+            os.mkdir(hmmer_path)
+        except OSError, err:
+            raise ValueError("cannot create MacSyFinder hmmer directory %s : %s" % (hmmer_path, err))
 
         try:
             log_level = self.parser.get('general', 'log_level', vars = cmde_line_opt)
@@ -237,7 +236,7 @@ class Config(object):
             log_handler = logging.FileHandler(log_file)
             options['log_file'] = log_file
         except Exception , err:
-            if not isinstance(err, NoOptionError):
+            if not isinstance(err, (NoOptionError, NoSectionError)):
                 log_error.append(err)
             try:
                 log_file = os.path.join( options['working_dir'], 'macsyfinder.log' )
@@ -247,7 +246,6 @@ class Config(object):
                 log_error.append(err)
                 log_handler = logging.StreamHandler(sys.stderr)
                 options['log_file'] = ''
-        
         handler_formatter = logging.Formatter("%(levelname)-8s : %(filename)-10s : L %(lineno)d : %(asctime)s : %(message)s")
         log_handler.setFormatter(handler_formatter)
         log_handler.setLevel(log_level)
@@ -258,7 +256,7 @@ class Config(object):
         logger = logging.getLogger('macsyfinder')
         logger.setLevel(log_level)
         logger.addHandler(log_handler)
-
+        
         f_out_log_handler = logging.FileHandler(os.path.join(working_dir, 'macsyfinder.out'))
         f_out_handler_formatter = logging.Formatter("%(message)s")
         f_out_log_handler.setFormatter(f_out_handler_formatter)
@@ -277,6 +275,7 @@ class Config(object):
         
 
         self._log = logging.getLogger('macsyfinder.config')
+        
         for error in log_error:
             self._log.warn(error)
         try:
@@ -562,33 +561,18 @@ class Config(object):
 
         except ValueError, err:
             self._log.error(str(err), exc_info= True)
+            logging.shutdown()
+            
             if working_dir:
                 import shutil
-
-                # close loggers filehandles, so they don't block file deletion
-                # in shutil.rmtree calls in Windows
-                handlers = logger.handlers[:]
-                for handler in handlers:
-                    handler.close()
-                    logger.removeHandler(handler)
-
-                handlers = out_logger.handlers[:]
-                for handler in handlers:
-                    handler.close()
-                    out_logger.removeHandler(handler)
-
                 try:
                     shutil.rmtree(working_dir)
                 except:
                     pass
+                
             raise err
         #build_indexes is not meaningfull in configuration file
         options['build_indexes']  = cmde_line_values['build_indexes']
-
-        # keep loggers in a place where they can be accessed to
-        # close the filehandles when necessary (like tearDown)
-        options['logger'] = logger
-        options['out_logger'] = out_logger
 
         return options
 
